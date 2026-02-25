@@ -60,16 +60,11 @@
                 return tg.showAlert("Заполните все поля!");
             }
 
-            const response = await fetch('/add_task', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    user_id: userId,
-                    task: textInput.value,
-                    date: dateInput.value
-                })
+        await fetch(`/add_task`, { 
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ user_id: userId, task: text, date: date })
             });
-
             if (response.ok) {
                 textInput.value = ''; // Очистка
                 dateInput.value = ''; // Очистка
