@@ -6,102 +6,81 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ru.js"></script>
     <style>
-        :root {
-            --bg-color: #181818;
-            --container-bg: #242424;
-            --text-color: #ffffff;
-            --hint-color: #aaaaaa;
-            --button-color: #3390ec;
-        }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
-        .container {
-            width: 90%;
-            max-width: 400px;
-            background: var(--container-bg);
-            padding: 20px;
-            border-radius: 15px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-        }
-        h2 { text-align: center; margin-bottom: 20px; font-size: 1.2rem; }
-        label { display: block; margin-bottom: 5px; color: var(--hint-color); font-size: 0.9rem; }
-        input {
-            width: 100%;
-            padding: 12px;
-            margin-bottom: 20px;
-            border-radius: 8px;
-            border: 1px solid #333;
-            background: #121212;
-            color: white;
-            box-sizing: border-box;
-            outline: none;
-        }
-        input:focus { border-color: var(--button-color); }
-        button {
-            width: 100%;
-            padding: 15px;
-            background-color: var(--button-color);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 1rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: opacity 0.2s;
-        }
-        button:active { opacity: 0.8; }
+        body { font-family: sans-serif; background: #121212; color: white; padding: 20px; }
+        .card { background: #1e1e1e; padding: 15px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        h3 { margin-top: 0; color: #3390ec; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #333; background: #000; color: white; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: #3390ec; border: none; border-radius: 8px; color: white; font-weight: bold; cursor: pointer; }
+        .task-list { margin-top: 20px; }
+        .task-item { background: #252525; padding: 12px; border-radius: 10px; margin-bottom: 8px; border-left: 4px solid #3390ec; }
+        .task-date { color: #888; font-size: 0.8rem; margin-top: 4px; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h2>🗓 Новое напоминание</h2>
-        
-        <label>Что напомнить?</label>
-        <input type="text" id="task_text" placeholder="Например: Покормить кота">
-        
-        <label>Когда?</label>
-        <input type="text" id="date_picker" placeholder="Выберите дату и время">
-        
-        <button id="main_button">СОХРАНИТЬ</button>
+    <div class="card">
+        <h3>➕ Новое напоминание</h3>
+        <input type="text" id="task_text" placeholder="Что напомнить?">
+        <input type="text" id="date_picker" placeholder="Дата и время">
+        <button onclick="saveTask()">СОХРАНИТЬ</button>
     </div>
+
+    <h4>📋 Ваши задачи</h4>
+    <div id="task_list" class="task-list">Загрузка...</div>
 
     <script>
         const tg = window.Telegram.WebApp;
-        tg.expand();
-        tg.ready();
-
-        // Инициализация темного календаря
-        flatpickr("#date_picker", {
-            enableTime: true,
-            dateFormat: "Y-m-d H:i",
-            minDate: "today",
-            locale: "ru",
-            time_24hr: true
+        const userId = tg.initDataUnsafe.user?.id || 0;
+        
+        flatpickr("#date_picker", { 
+            enableTime: true, 
+            dateFormat: "Y-m-d H:i", 
+            theme: "dark",
+            minDate: "today" 
         });
 
-        const btn = document.getElementById('main_button');
-        btn.addEventListener('click', () => {
-            const task = document.getElementById('task_text').value;
-            const date = document.getElementById('date_picker').value;
+        async function loadTasks() {
+            const res = await fetch(`/tasks/${userId}`);
+            const tasks = await res.json();
+            const list = document.getElementById('task_list');
+            list.innerHTML = tasks.length ? '' : '<p style="color: #666;">Задач пока нет</p>';
+            tasks.forEach(t => {
+                list.innerHTML += `<div class="task-item">
+                    <div>${t.text}</div>
+                    <div class="task-date">📅 ${t.date.replace('T', ' ')}</div>
+                </div>`;
+            });
+        }
 
-            if (!task || !date) {
-                tg.showAlert("Пожалуйста, заполни все поля!");
-                return;
+        async function saveTask() {
+            const textInput = document.getElementById('task_text');
+            const dateInput = document.getElementById('date_picker');
+            
+            if(!textInput.value || !dateInput.value) {
+                return tg.showAlert("Заполните все поля!");
             }
 
-            const data = JSON.stringify({ task: task, date: date });
-            tg.sendData(data); // Отправка данных боту
-        });
+            const response = await fetch('/add_task', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    user_id: userId,
+                    task: textInput.value,
+                    date: dateInput.value
+                })
+            });
+
+            if (response.ok) {
+                textInput.value = ''; // Очистка
+                dateInput.value = ''; // Очистка
+                loadTasks(); // Обновить список
+                tg.showScanQrPopup({text: "Сохранено!"}); // Маленькое уведомление
+                setTimeout(() => tg.closeScanQrPopup(), 1000);
+            }
+        }
+
+        tg.ready();
+        loadTasks();
     </script>
 </body>
 </html>
